@@ -45,11 +45,11 @@ void conv2d(T*             output,
     if (std::is_same<T, half>::value) {
         dataType = CUDNN_DATA_HALF;
     }
-#ifdef ENABLE_BF16
-    else if (std::is_same<T, __nv_bfloat16>::value) {
-        dataType = CUDNN_DATA_BFLOAT16;
-    }
-#endif
+//#ifdef ENABLE_BF16
+//    else if (std::is_same<T, __nv_bfloat16>::value) {
+//        dataType = CUDNN_DATA_BFLOAT16;
+//    }
+//#endif
     else {
         dataType = CUDNN_DATA_FLOAT;
     }

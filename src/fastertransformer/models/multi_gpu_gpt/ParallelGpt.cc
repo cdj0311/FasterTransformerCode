@@ -534,6 +534,7 @@ void ParallelGpt<T>::forward(std::unordered_map<std::string, Tensor>*       outp
     //      output_seq_len [batch_size] on cpu
     //      stop_words_list [batch_size, 2, stop_words_length], optional
     //      bad_words_list [2, bad_words_length] or [batch_size, 2, bad_words_length], optional
+    //      option_last_ids [batch_size, max_option_last_count]
     //      start_id [batch_size] on cpu, optional
     //      end_id [batch_size] on cpu, optional
     //      runtime_top_k [1] or [batch_size] on cpu, optional, uint.
@@ -1162,6 +1163,7 @@ void ParallelGpt<T>::forward(std::unordered_map<std::string, Tensor>*       outp
                      Tensor{MEMORY_GPU, TYPE_FP32, {batch_size, beam_width, vocab_size_padded_}, logits_buf_}},
                     {"embedding_bias", Tensor{MEMORY_GPU, data_type, {vocab_size_padded_}, nullptr}},
                     {"step", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &step_}},
+                    {"step_start", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &step_start}},
                     {"max_input_length", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &max_context_len}},
                     {"sequence_limit_length", Tensor{MEMORY_GPU, TYPE_UINT32, {batch_size}, seq_limit_len_}},
                     {"end_id", Tensor{MEMORY_GPU, TYPE_INT32, {batch_size}, end_ids_buf_}},

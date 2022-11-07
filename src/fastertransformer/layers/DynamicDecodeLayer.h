@@ -48,6 +48,7 @@ protected:
         "beam_search_diversity_rate", "temperature", "len_penalty", "repetition_penalty"};
     bool has_diff_runtime_args_ = false;
     int* finished_sum_          = nullptr;
+    int* is_option_last_token_  = nullptr;
 
 public:
     DynamicDecodeLayer(size_t           vocab_size,

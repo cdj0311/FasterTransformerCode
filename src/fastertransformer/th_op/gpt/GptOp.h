@@ -35,6 +35,8 @@ public:
                          th::Tensor&              cum_log_probs,
                          const size_t             request_output_len,
                          const size_t             beam_width,
+                         th::optional<th::Tensor> option_last_ids,
+                         th::optional<th::Tensor> option_last_counts,
                          th::optional<th::Tensor> top_k_opt,
                          th::optional<th::Tensor> top_p_opt,
                          th::optional<th::Tensor> beam_search_diversity_rate_opt,
@@ -186,6 +188,8 @@ public:
                  th::Tensor&              cum_log_probs,
                  const size_t             request_output_len,
                  const size_t             beam_width,
+                 th::optional<th::Tensor> option_last_ids,
+                 th::optional<th::Tensor> option_last_counts,
                  th::optional<th::Tensor> top_k_opt,
                  th::optional<th::Tensor> top_p_opt,
                  th::optional<th::Tensor> beam_search_diversity_rate_opt,
@@ -259,7 +263,11 @@ public:
                                                     false,
                                                     &prop_,
                                                     sparse_,
-                                                    0);
+                                                    0,
+                                                    nullptr,
+                                                    0,
+                                                    true,
+                                                    0.0f);
         std::vector<uint32_t> output_seq_len(request_batch_size, total_output_len);
 
         std::unordered_map<std::string, ft::Tensor> input_tensors = std::unordered_map<std::string, ft::Tensor>{
@@ -278,6 +286,20 @@ public:
             input_tensors.insert(
                 {"beam_search_diversity_rate",
                  convert_tensor<float>(beam_search_diversity_rate_opt.value(), ft::MemoryType::MEMORY_CPU)});
+        }
+        if (option_last_ids.has_value() && option_last_counts.has_value()) {
+            input_tensors.insert(
+                {"option_last_ids", 
+                 ft::Tensor{ft::MEMORY_GPU, 
+                            ft::TYPE_INT32, 
+                            std::vector<size_t>{request_batch_size, option_last_ids.value().size(1)}, 
+                            get_ptr<int>(option_last_ids.value())}});
+            input_tensors.insert(
+                {"option_last_counts", 
+                 ft::Tensor{ft::MEMORY_GPU, 
+                            ft::TYPE_INT32, 
+                            std::vector<size_t>{request_batch_size}, 
+                            get_ptr<int>(option_last_counts.value())}});
         }
         if (top_p_opt.has_value()) {
             input_tensors.insert(
@@ -394,6 +416,8 @@ public:
                                th::Tensor               input_lengths,
                                const int64_t            output_len,
                                th::optional<int64_t>    beam_width_opt,
+                               th::optional<th::Tensor> option_last_ids,
+                               th::optional<th::Tensor> option_last_counts,
                                th::optional<th::Tensor> top_k_opt,
                                th::optional<th::Tensor> top_p_opt,
                                th::optional<th::Tensor> beam_search_diversity_rate_opt,

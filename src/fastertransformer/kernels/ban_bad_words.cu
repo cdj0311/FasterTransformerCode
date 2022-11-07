@@ -161,4 +161,135 @@ template void invokeBanBadWords(float*       logits,
                                 size_t       step,
                                 cudaStream_t stream);
 
+
+
+
+
+
+template<typename T>
+__global__ void retain_option_last_tokens_stage_1(  T*           logits,                // [beam_width, vocab_size_padded]
+                                                    const int*   option_last_ids,       // [max_option_last_count]
+                                                    int*         is_option_last_token,  // [vocab_size_padded]
+                                                    int          beam_width,
+                                                    size_t       max_option_last_count,
+                                                    int          vocab_size_padded)
+{
+    int stride_x = blockDim.x * gridDim.x;
+    int stride_y = blockDim.y * gridDim.y;
+    int idx_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int idx_y = threadIdx.y + blockIdx.y * blockDim.y;
+    int stride = stride_x * stride_y;
+    int idx = idx_y * stride_x + idx_x;
+
+    for (int i = idx; i < vocab_size_padded; i += stride) {
+        is_option_last_token[i] = 0;
+    }
+}
+
+template<typename T>
+__global__ void retain_option_last_tokens_stage_2(  T*           logits,                // [beam_width, vocab_size_padded]
+                                                    const int*   option_last_ids,       // [max_option_last_count]
+                                                    int*         is_option_last_token,  // [vocab_size_padded]
+                                                    int          beam_width,
+                                                    size_t       max_option_last_count,
+                                                    int          vocab_size_padded)
+{
+    int stride_x = blockDim.x * gridDim.x;
+    int stride_y = blockDim.y * gridDim.y;
+    int idx_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int idx_y = threadIdx.y + blockIdx.y * blockDim.y;
+    int stride = stride_x * stride_y;
+    int idx = idx_y * stride_x + idx_x;
+
+    for (int i = idx; i < max_option_last_count; i += stride) {
+        is_option_last_token[option_last_ids[i]] = 1;
+    }
+}
+
+template<typename T>
+__global__ void retain_option_last_tokens_stage_3(  T*           logits,                // [beam_width, vocab_size_padded]
+                                                    const int*   option_last_ids,       // [max_option_last_count]
+                                                    int*         is_option_last_token,  // [vocab_size_padded]
+                                                    int          beam_width,
+                                                    size_t       max_option_last_count,
+                                                    int          vocab_size_padded)
+{
+    int stride_x = blockDim.x * gridDim.x;
+    int stride_y = blockDim.y * gridDim.y;
+    int idx_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int idx_y = threadIdx.y + blockIdx.y * blockDim.y;
+
+    for (int i = idx_x; i < vocab_size_padded; i += stride_x) {
+        for (int j = idx_y; j < beam_width; j += stride_y) {
+            if (is_option_last_token[i] < 0.5) {
+                logits[j * vocab_size_padded + i] = static_cast<T>(-INFINITY);
+            }
+        }
+    }
+}
+
+
+template<typename T>
+void invokeRetainOptionLastTokens(  T*              logits,                 // [beam_width, vocab_size_padded]
+                                    const int*      option_last_ids,        // [max_option_last_count]
+                                    int*            is_option_last_token,   // [vocab_size_padded]
+                                    int             beam_width,
+                                    size_t          max_option_last_count,
+                                    int             vocab_size_padded,
+                                    cudaStream_t    stream)
+{
+    dim3 block, grid;
+    block.x = 256;
+    grid.x = (vocab_size_padded + 2048 - 1) / 2048;
+    grid.y = beam_width;
+
+    retain_option_last_tokens_stage_1<<<grid, block, 0, stream>>>(  logits, 
+                                                                    option_last_ids, 
+                                                                    is_option_last_token, 
+                                                                    beam_width, 
+                                                                    max_option_last_count, 
+                                                                    vocab_size_padded);
+
+    retain_option_last_tokens_stage_2<<<grid, block, 0, stream>>>(  logits, 
+                                                                    option_last_ids, 
+                                                                    is_option_last_token, 
+                                                                    beam_width, 
+                                                                    max_option_last_count, 
+                                                                    vocab_size_padded);
+    
+    retain_option_last_tokens_stage_3<<<grid, block, 0, stream>>>(  logits, 
+                                                                    option_last_ids, 
+                                                                    is_option_last_token, 
+                                                                    beam_width, 
+                                                                    max_option_last_count, 
+                                                                    vocab_size_padded);
+
+    sync_check_cuda_error();
+}
+
+
+template void invokeRetainOptionLastTokens( half*           logits,                 // [beam_width, vocab_size_padded]
+                                            const int*      option_last_ids,        // [max_option_last_count]
+                                            int*            is_option_last_token,   // [vocab_size_padded]
+                                            int             beam_width,
+                                            size_t          max_option_last_count,
+                                            int             vocab_size_padded,
+                                            cudaStream_t    stream);
+#ifdef ENABLE_BF16
+template void invokeRetainOptionLastTokens( __nv_bfloat16*  logits,                 // [beam_width, vocab_size_padded]
+                                            const int*      option_last_ids,        // [max_option_last_count]
+                                            int*            is_option_last_token,   // [vocab_size_padded]
+                                            int             beam_width,
+                                            size_t          max_option_last_count,
+                                            int             vocab_size_padded,
+                                            cudaStream_t    stream);
+#endif
+template void invokeRetainOptionLastTokens( float*          logits,                 // [beam_width, vocab_size_padded]
+                                            const int*      option_last_ids,        // [max_option_last_count]
+                                            int*            is_option_last_token,   // [vocab_size_padded]
+                                            int             beam_width,
+                                            size_t          max_option_last_count,
+                                            int             vocab_size_padded,
+                                            cudaStream_t    stream);
+
 }  // namespace fastertransformer

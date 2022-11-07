@@ -101,6 +101,8 @@ std::vector<th::Tensor> GptOp::forward(th::Tensor               input_ids,
                                        th::Tensor               input_lengths,
                                        const int64_t            output_len,
                                        th::optional<int64_t>    beam_width_opt,
+                                       th::optional<th::Tensor> option_last_ids,
+                                       th::optional<th::Tensor> option_last_counts,
                                        th::optional<th::Tensor> top_k_opt,
                                        th::optional<th::Tensor> top_p_opt,
                                        th::optional<th::Tensor> beam_search_diversity_rate_opt,
@@ -116,6 +118,14 @@ std::vector<th::Tensor> GptOp::forward(th::Tensor               input_ids,
     CHECK_TH_CUDA(input_lengths);
     CHECK_CONTIGUOUS(input_lengths);
     TORCH_CHECK(input_lengths.dtype() == torch::kInt32, "input_lengths dtype should be int32");
+    if (option_last_ids.has_value()) {
+        CHECK_TH_CUDA(option_last_ids.value());
+        CHECK_CONTIGUOUS(option_last_ids.value());
+        TORCH_CHECK(option_last_ids.value().dtype() == torch::kInt32, "option_last_ids dtype should be int32");
+        CHECK_TH_CUDA(option_last_counts.value());
+        CHECK_CONTIGUOUS(option_last_counts.value());
+        TORCH_CHECK(option_last_counts.value().dtype() == torch::kInt32, "option_last_counts dtype should be int32");
+    }
     int64_t return_cum_log_probs = return_cum_log_probs_opt.has_value() ? (int64_t)return_cum_log_probs_opt.value() : 0;
     if (return_cum_log_probs_opt.has_value()) {
         TORCH_CHECK(return_cum_log_probs == 0 || return_cum_log_probs == 1 || return_cum_log_probs == 2,
@@ -144,6 +154,8 @@ std::vector<th::Tensor> GptOp::forward(th::Tensor               input_ids,
                    cum_log_probs,
                    (const size_t)output_len,
                    (const size_t)beam_width,
+                   option_last_ids,
+                   option_last_counts,
                    top_k_opt,
                    top_p_opt,
                    beam_search_diversity_rate_opt,

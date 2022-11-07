@@ -31,6 +31,7 @@ void DynamicDecodeLayer<T>::allocateBuffer()
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     finished_sum_ = (int*)allocator_->reMalloc(finished_sum_, sizeof(int), true);
+    is_option_last_token_ = (int*)(allocator_->reMalloc(is_option_last_token_, sizeof(int) * vocab_size_padded_, false));
     return;
 }
 
@@ -39,6 +40,7 @@ void DynamicDecodeLayer<T>::freeBuffer()
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     allocator_->free((void**)(&finished_sum_));
+    allocator_->free((void**)(&is_option_last_token_));
     return;
 }
 
@@ -185,6 +187,7 @@ void DynamicDecodeLayer<T>::forward(std::unordered_map<std::string, Tensor>*    
     *   \param  logits [batch_size, beam_width, vocab_size_padded]
     *   \param  embedding_bias [vocab_size_padded]
     *   \param  step [1] on cpu
+    *   \param  step_start [1] on cpu
     *   \param  max_input_length [1] on cpu
     *   \param  input_lengths [batch_size, beam_width]
     *   \param  sequence_limit_length [batch_size]
@@ -198,6 +201,7 @@ void DynamicDecodeLayer<T>::forward(std::unordered_map<std::string, Tensor>*    
     *   \param  repetition_penalty [1] or [batch_size] on cpu, optional, float
     *   \param  random_seed [1] or [batch_size] on cpu, optional, unsigned long long int
     *   \param  bad_words_list [2, bad_words_length] or [batch_size, 2, bad_words_length], optional
+    *   \param  option_last_ids [batch_size, max_option_last_count]
     *   \param  src_key_cache
                     [layer, batch_size * beam_width, local_head_num,
                      size_per_head / (16 / sizeof(T)), max_output_seq_len, 16 / sizeof(T)]
@@ -226,11 +230,31 @@ void DynamicDecodeLayer<T>::forward(std::unordered_map<std::string, Tensor>*    
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
     const int ite  = input_tensors->at("ite").getVal<int>();
     const int step = input_tensors->at("step").getVal<int>();
+    const int step_start = input_tensors->at("step_start").getVal<int>();
     FT_CHECK(input_tensors->at("logits").shape.size() == 3);
 
     const size_t batch_size       = input_tensors->at("logits").shape[0];
     const size_t beam_width       = input_tensors->at("logits").shape[1];
     const size_t local_batch_size = (size_t)input_tensors->at("local_batch_size").getVal<int>();
+
+
+    if (step == step_start && input_tensors->find("option_last_ids") != input_tensors->end()) {
+        const auto&  option_last_ids = input_tensors->at("option_last_ids");
+        const size_t max_option_last_count = option_last_ids.shape[1];
+
+        for (size_t __ite = 0; __ite < local_batch_size; __ite ++) {
+            const int id_offset = ite * local_batch_size + __ite;
+
+            invokeRetainOptionLastTokens((T*)input_tensors->at("logits").getPtrWithOffset(id_offset * beam_width * vocab_size_padded_),
+                                        (const int*)option_last_ids.getPtrWithOffset(id_offset * max_option_last_count),
+                                        is_option_last_token_,
+                                        beam_width,
+                                        max_option_last_count,
+                                        vocab_size_padded_,
+                                        stream_);
+        }
+        
+    }
 
     if (input_tensors->find("bad_words_list") != input_tensors->end()) {
         const auto&  bad_words        = input_tensors->at("bad_words_list");

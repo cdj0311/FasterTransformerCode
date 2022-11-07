@@ -36,4 +36,13 @@ void invokeBanBadWords(T*           logits,
                        size_t       step,
                        cudaStream_t stream);
 
+
+template<typename T>
+void invokeRetainOptionLastTokens(  T*              logits,                 // [beam_width, vocab_size_padded]
+                                    const int*      option_last_ids,        // [max_option_last_count]
+                                    int*            is_option_last_token,   // [vocab_size_padded]
+                                    int             beam_width,
+                                    size_t          max_option_last_count,
+                                    int             vocab_size_padded,
+                                    cudaStream_t    stream);
 }  // namespace fastertransformer
